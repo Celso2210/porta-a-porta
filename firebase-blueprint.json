@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "usuarios": {
+      "title": "usuarios",
+      "description": "Perfis de usuários e passageiros cadastrados.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "ID do usuário no Firebase Auth" },
+        "nome": { "type": "string", "description": "Nome completo" },
+        "email": { "type": "string", "description": "E-mail de login" },
+        "telefone": { "type": "string", "description": "Telefone / Celular" },
+        "papel": { "type": "string", "description": "Papel do usuário ('passageiro' ou 'motorista')" },
+        "cidadePadrao": { "type": "string", "description": "Cidade base para transporte" },
+        "criadoEm": { "type": "string", "format": "date-time", "description": "Data de criação do perfil" }
+      },
+      "required": ["uid", "nome", "email", "papel"]
+    },
+    "motoristas": {
+      "title": "motoristas",
+      "description": "Perfis e dados de veículos de motoristas cadastrados.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "ID do usuário no Firebase Auth" },
+        "nome": { "type": "string", "description": "Nome do motorista" },
+        "email": { "type": "string", "description": "E-mail de login" },
+        "telefone": { "type": "string", "description": "Telefone do motorista" },
+        "cnh": { "type": "string", "description": "Registro da CNH" },
+        "statusAprovacao": { "type": "string", "description": "Status do cadastro ('pendente', 'aprovado', 'rejeitado')" },
+        "veiculo": {
+          "type": "object",
+          "properties": {
+            "modelo": { "type": "string" },
+            "placa": { "type": "string" },
+            "cor": { "type": "string" },
+            "ano": { "type": "string" },
+            "capacidadePassageiros": { "type": "number" }
+          },
+          "required": ["modelo", "placa", "cor", "capacidadePassageiros"]
+        },
+        "criadoEm": { "type": "string", "format": "date-time", "description": "Data de cadastro" }
+      },
+      "required": ["uid", "nome", "email", "cnh", "statusAprovacao", "veiculo"]
+    },
+    "documentos_motoristas": {
+      "title": "documentos_motoristas",
+      "description": "Documentos e fotos enviados pelo motorista para validação e auditoria.",
+      "type": "object",
+      "properties": {
+        "motoristaId": { "type": "string", "description": "ID do motorista" },
+        "motoristaNome": { "type": "string", "description": "Nome do motorista" },
+        "fotoMotoristaUrl": { "type": "string", "description": "Foto do rosto/perfil do motorista" },
+        "fotoMotoristaStatus": { "type": "string", "description": "Status da foto do motorista" },
+        "cnhNumero": { "type": "string", "description": "Número da CNH" },
+        "cnhFotoUrl": { "type": "string", "description": "Foto/Arquivo da CNH" },
+        "cnhStatus": { "type": "string", "description": "Status da CNH" },
+        "fotoVeiculoUrl": { "type": "string", "description": "Foto do veículo" },
+        "fotoVeiculoStatus": { "type": "string", "description": "Status da foto do veículo" },
+        "crlvNumero": { "type": "string", "description": "Número do CRLV/Renavam" },
+        "crlvFotoUrl": { "type": "string", "description": "Foto/Arquivo do CRLV" },
+        "crlvStatus": { "type": "string", "description": "Status do documento do veículo" },
+        "statusGeral": { "type": "string", "description": "Status geral de validação ('pendente', 'em_analise', 'aprovado', 'rejeitado')" },
+        "dataEnvio": { "type": "string", "format": "date-time" }
+      },
+      "required": ["motoristaId", "fotoMotoristaUrl", "cnhFotoUrl", "fotoVeiculoUrl", "crlvFotoUrl", "statusGeral"]
+    },
+    "documentos_passageiros": {
+      "title": "documentos_passageiros",
+      "description": "Documentos e foto do passageiro para conclusão do cadastro e segurança.",
+      "type": "object",
+      "properties": {
+        "passageiroId": { "type": "string", "description": "ID do passageiro" },
+        "passageiroNome": { "type": "string", "description": "Nome do passageiro" },
+        "fotoPassageiroUrl": { "type": "string", "description": "Foto do rosto/perfil do passageiro" },
+        "fotoPassageiroStatus": { "type": "string", "description": "Status da foto do passageiro" },
+        "tipoDocumento": { "type": "string", "description": "Tipo de documento ('rg', 'cnh', 'cpf')" },
+        "documentoNumero": { "type": "string", "description": "Número do documento" },
+        "documentoFotoUrl": { "type": "string", "description": "Foto do documento oficial" },
+        "documentoStatus": { "type": "string", "description": "Status do documento" },
+        "statusGeral": { "type": "string", "description": "Status geral de validação" },
+        "dataEnvio": { "type": "string", "format": "date-time" }
+      },
+      "required": ["passageiroId", "fotoPassageiroUrl", "documentoFotoUrl", "statusGeral"]
+    },
+    "solicitacoes_viagem": {
+      "title": "solicitacoes_viagem",
+      "description": "Chamados e solicitações reais de viagens intermunicipais.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "passageiroId": { "type": "string" },
+        "passageiroNome": { "type": "string" },
+        "passageiroTelefone": { "type": "string" },
+        "cidadeOrigem": { "type": "string" },
+        "cidadeDestino": { "type": "string" },
+        "enderecoEmbarque": { "type": "string" },
+        "enderecoDesembarque": { "type": "string" },
+        "qtdPassageiros": { "type": "number" },
+        "qtdMalas": { "type": "number" },
+        "valorTotal": { "type": "number" },
+        "status": { "type": "string" },
+        "criadoEm": { "type": "string" }
+      },
+      "required": ["id", "passageiroId", "cidadeOrigem", "cidadeDestino", "enderecoEmbarque", "status"]
+    },
+    "ofertas_vagas": {
+      "title": "ofertas_vagas",
+      "description": "Ofertas de vagas publicadas pelos motoristas (de 1 vaga a 4 vagas por turno).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "motoristaId": { "type": "string" },
+        "motoristaNome": { "type": "string" },
+        "motoristaTelefone": { "type": "string" },
+        "cidadeOrigem": { "type": "string" },
+        "cidadeDestino": { "type": "string" },
+        "data": { "type": "string" },
+        "turno": { "type": "string" },
+        "vagasTotais": { "type": "number" },
+        "vagasDisponiveis": { "type": "number" },
+        "valorPorVaga": { "type": "number" },
+        "status": { "type": "string" },
+        "criadoEm": { "type": "string" }
+      },
+      "required": ["id", "motoristaId", "cidadeOrigem", "cidadeDestino", "turno", "vagasTotais", "vagasDisponiveis", "status"]
+    },
+    "notificacoes": {
+      "title": "notificacoes",
+      "description": "Notificações Web Push e alertas de status para passageiros e motoristas.",
+      "type": "object",
+      "properties": {
+        "usuarioUid": { "type": "string" },
+        "titulo": { "type": "string" },
+        "mensagem": { "type": "string" },
+        "tipo": { "type": "string" },
+        "solicitacaoId": { "type": "string" },
+        "motoristaNome": { "type": "string" },
+        "lida": { "type": "boolean" },
+        "criadoEm": { "type": "string", "format": "date-time" }
+      },
+      "required": ["usuarioUid", "titulo", "mensagem", "tipo", "lida"]
+    }
+  }
+}

@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /motoristas/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /documentos_motoristas/{driverId} {
+      allow read, write: if true;
+    }
+
+    match /documentos_passageiros/{passengerId} {
+      allow read, write: if true;
+    }
+
+    match /configuracoes/{configId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /solicitacoes_viagem/{solicitacaoId} {
+      allow read, write: if true;
+    }
+
+    match /ofertas_vagas/{ofertaId} {
+      allow read, write: if true;
+    }
+
+    match /notificacoes/{notifId} {
+      allow read, write: if true;
+    }
+  }
+}
