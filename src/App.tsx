@@ -18,6 +18,7 @@ import { AvaliacaoView } from './components/passageiro/AvaliacaoView';
 import { MotoristaDashboard } from './components/motorista/MotoristaDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { ArchitectDocs } from './components/docs/ArchitectDocs';
+import { PortaAPortaLoginView } from './components/auth/PortaAPortaLoginView';
 import { FirebaseAuthView } from './components/common/FirebaseAuthView';
 import { NotificationToast } from './components/common/NotificationToast';
 import { PassageiroDocumentosModal } from './components/passageiro/PassageiroDocumentosModal';
@@ -123,12 +124,16 @@ export default function App() {
 
       case 'login':
         return (
-          <LoginView 
-            onSendSms={(phone) => {
-              setTripData({ ...tripData, phoneUser: phone });
-              setPassageiroStep('sms');
-            }} 
-            onDemoLogin={() => setPassageiroStep('home')}
+          <PortaAPortaLoginView 
+            onSuccess={(profile) => {
+              if (profile.papel === 'motorista') {
+                setActiveModule('motorista');
+              } else {
+                setPassageiroStep('home');
+              }
+            }}
+            onNavigateToPassenger={() => setPassageiroStep('home')}
+            onNavigateToDriver={() => setActiveModule('motorista')}
           />
         );
 
@@ -147,7 +152,7 @@ export default function App() {
             userName="Celso"
             tariffConfig={tariffConfig}
             onSolicitar={(details) => {
-              setTripData({
+              const updatedData = {
                 ...tripData,
                 origem: details.origem,
                 destino: details.destino,
@@ -162,8 +167,40 @@ export default function App() {
                 taxaReserva: details.taxaReserva,
                 valorRestanteEmbarque: details.valorRestanteEmbarque,
                 precoPorKmAplicado: details.precoPorKmAplicado
+              };
+              setTripData(updatedData);
+
+              const valorTotal = details.precoEstimado || 45.00;
+              const taxaReserva = details.taxaReserva || (Math.round(valorTotal * 0.10 * 100) / 100);
+              const valorRestante = details.valorRestanteEmbarque || (Math.round((valorTotal - taxaReserva) * 100) / 100);
+
+              // Cria a solicitação imediatamente para os motoristas no mural
+              const novaSol = adicionarNovaSolicitacao({
+                passageiroId: USUARIO_CELSO.id,
+                passageiroNome: 'Celso (Passageiro)',
+                passageiroTelefone: updatedData.phoneUser || '(27) 99876-5432',
+                passageiroAvatar: USUARIO_CELSO.avatar,
+                cidadeOrigem: details.origem,
+                cidadeDestino: details.destino,
+                enderecoEmbarque: details.origemCompleta || `${details.origem} - Centro`,
+                enderecoDesembarque: details.destinoCompleto || `${details.destino} - Centro`,
+                qtdPassageiros: details.passageiros || 1,
+                qtdMalas: details.malas || 0,
+                modalidade: details.modalidade || 'compartilhada',
+                distanciaKm: details.distanciaKm || 120,
+                valorTotal: valorTotal,
+                taxaReserva: taxaReserva,
+                valorLiquidoMotorista: valorRestante,
+                valorRestanteEmbarque: valorTotal,
+                taxaReservaPaga: true,
+                metodoPagamentoTaxa: 'Pagamento no Embarque',
+                dataViagem: details.dataViagem || 'Hoje',
+                horarioDesejado: details.agendamento || 'Hoje'
               });
-              setPassageiroStep('solicitar');
+
+              setActiveSolicitacaoId(novaSol.id);
+              // Vai DIRETO para a corrida e para o motorista!
+              setPassageiroStep('procurando');
             }}
           />
         );
@@ -296,6 +333,7 @@ export default function App() {
         return (
           <HomeView 
             tariffConfig={tariffConfig}
+            onOpenLogin={() => setActiveModule('auth')}
             onSolicitar={() => setPassageiroStep('solicitar')} 
           />
         );
@@ -315,10 +353,10 @@ export default function App() {
       />
 
       {/* Main Workspace */}
-      <main className="flex-1 py-6 px-4">
+      <main className="flex-1 py-2 px-2 sm:py-6 sm:px-4">
         {activeModule === 'passageiro' && (
-          <div className="max-w-xl mx-auto space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 transition-all">
+          <div className="max-w-xl mx-auto space-y-3">
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xs p-2.5 sm:p-5 transition-all">
               {renderPassageiroContent()}
             </div>
           </div>
@@ -326,7 +364,27 @@ export default function App() {
 
         {activeModule === 'motorista' && <MotoristaDashboard />}
 
-        {activeModule === 'auth' && <FirebaseAuthView />}
+        {activeModule === 'auth' && (
+          <div className="max-w-xl mx-auto">
+            <PortaAPortaLoginView 
+              onSuccess={(profile) => {
+                if (profile.papel === 'motorista') {
+                  setActiveModule('motorista');
+                } else {
+                  setActiveModule('passageiro');
+                  setPassageiroStep('home');
+                }
+              }}
+              onNavigateToPassenger={() => {
+                setActiveModule('passageiro');
+                setPassageiroStep('home');
+              }}
+              onNavigateToDriver={() => {
+                setActiveModule('motorista');
+              }}
+            />
+          </div>
+        )}
 
         {activeModule === 'admin' && (
           <AdminDashboard 

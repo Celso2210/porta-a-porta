@@ -33,9 +33,10 @@ export interface DriverTripPlan {
   paradasGeradas: Parada[];
 }
 
-const STORAGE_KEY_SOLICITACOES = 'portaaporta_solicitacoes_v5';
-const STORAGE_KEY_DRIVER_PLAN = 'portaaporta_driver_plan_v5';
-const STORAGE_KEY_OFERTAS_VAGAS = 'portaaporta_ofertas_vagas_v5';
+const STORAGE_KEY_SOLICITACOES = 'portaaporta_solicitacoes_prod_v1';
+const STORAGE_KEY_DRIVER_PLAN = 'portaaporta_driver_plan_prod_v1';
+const STORAGE_KEY_OFERTAS_VAGAS = 'portaaporta_ofertas_prod_v1';
+const STORAGE_KEY_IS_PROD_ZERO = 'portaaporta_is_production_clean_v1';
 
 // Vagas padrão iniciais cadastradas pelos motoristas (ex: José com 4 vagas de manhã, Carlos com 1 vaga à tarde)
 const INITIAL_DEFAULT_OFERTAS_VAGAS: OfertaVaga[] = [
@@ -150,28 +151,22 @@ const INITIAL_DEFAULT_SOLICITACOES: SolicitacaoViagem[] = [
     passageiroTelefone: '(27) 99876-5432',
     passageiroAvatar: USUARIO_CELSO.avatar,
     cidadeOrigem: 'Água Doce do Norte',
-    cidadeDestino: 'Vitória da Conquista',
+    cidadeDestino: 'Vitória',
     enderecoEmbarque: 'Rua das Flores, 120 - Centro, Água Doce do Norte',
-    enderecoDesembarque: 'Av. Olívia Flores, 450 - Candeias, Vitória da Conquista',
+    enderecoDesembarque: 'Av. Vitória, 500 - Centro, Vitória',
     qtdPassageiros: 1,
     qtdMalas: 2,
     modalidade: 'compartilhada',
-    distanciaKm: 420,
+    distanciaKm: 260,
     valorTotal: 50.00,
     taxaReserva: 5.00,
     valorLiquidoMotorista: 45.00,
     valorRestanteEmbarque: 45.00,
     taxaReservaPaga: true,
     metodoPagamentoTaxa: 'PIX Instantâneo',
-    horarioDesejado: '08:00',
-    status: 'confirmada',
-    motoristaId: MOTORISTA_JOSE.id,
-    motoristaNome: MOTORISTA_JOSE.nome,
-    motoristaTelefone: MOTORISTA_JOSE.telefone,
-    motoristaAvatar: MOTORISTA_JOSE.avatar,
-    motoristaVeiculo: MOTORISTA_JOSE.veiculo.modelo,
-    motoristaPlaca: MOTORISTA_JOSE.veiculo.placa,
-    motoristaNota: MOTORISTA_JOSE.nota,
+    dataViagem: 'Hoje',
+    horarioDesejado: 'Manhã (06h às 08h)',
+    status: 'aguardando_motorista',
     criadoEm: 'Há 5 min'
   },
   {
@@ -194,7 +189,8 @@ const INITIAL_DEFAULT_SOLICITACOES: SolicitacaoViagem[] = [
     valorRestanteEmbarque: 40.50,
     taxaReservaPaga: true,
     metodoPagamentoTaxa: 'PIX Instantâneo',
-    horarioDesejado: '14:00',
+    dataViagem: 'Amanhã',
+    horarioDesejado: 'Tarde (10h às 14h)',
     status: 'aguardando_motorista',
     criadoEm: 'Há 15 min'
   },
@@ -206,7 +202,7 @@ const INITIAL_DEFAULT_SOLICITACOES: SolicitacaoViagem[] = [
     passageiroAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     cidadeOrigem: 'Água Doce do Norte',
     cidadeDestino: 'Vitória',
-    enderecoEmbarque: 'Rua Principal, 88 - Bairro Novo, Água Doce do Norte',
+    enderecoEmbarque: 'Terminal Rodoviário - Centro, Água Doce do Norte',
     enderecoDesembarque: 'Av. Nossa Senhora dos Navegantes, 900 - Enseada, Vitória',
     qtdPassageiros: 3,
     qtdMalas: 3,
@@ -218,9 +214,85 @@ const INITIAL_DEFAULT_SOLICITACOES: SolicitacaoViagem[] = [
     valorRestanteEmbarque: 162.00,
     taxaReservaPaga: true,
     metodoPagamentoTaxa: 'PIX Instantâneo',
-    horarioDesejado: '19:00',
+    dataViagem: 'Hoje',
+    horarioDesejado: 'Saída às 10:00',
+    status: 'aguardando_motorista',
+    criadoEm: 'Há 5 min'
+  },
+  {
+    id: 'SOL_FERNANDO_04',
+    passageiroId: 'USR_FERNANDO',
+    passageiroNome: 'Fernando Dias',
+    passageiroTelefone: '(27) 99888-3344',
+    passageiroAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    cidadeOrigem: 'Água Doce do Norte',
+    cidadeDestino: 'Vitória',
+    enderecoEmbarque: 'Rua Principal, 110 - Centro, Água Doce do Norte',
+    enderecoDesembarque: 'Aeroporto Eurico de Aguiar Salles, Vitória',
+    qtdPassageiros: 2,
+    qtdMalas: 2,
+    modalidade: 'exclusiva',
+    distanciaKm: 260,
+    valorTotal: 180.00,
+    taxaReserva: 18.00,
+    valorLiquidoMotorista: 162.00,
+    valorRestanteEmbarque: 162.00,
+    taxaReservaPaga: true,
+    metodoPagamentoTaxa: 'PIX Instantâneo',
+    dataViagem: 'Depois de amanhã',
+    horarioDesejado: 'Saída às 11:30',
+    status: 'aguardando_motorista',
+    criadoEm: 'Há 25 min'
+  },
+  {
+    id: 'SOL_PAULA_05',
+    passageiroId: 'USR_PAULA',
+    passageiroNome: 'Paula Lima',
+    passageiroTelefone: '(27) 99765-8899',
+    passageiroAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    cidadeOrigem: 'Água Doce do Norte',
+    cidadeDestino: 'Vitória',
+    enderecoEmbarque: 'Av. Central, 80 - Centro, Água Doce do Norte',
+    enderecoDesembarque: 'Hospital Santa Rita, Maruípe, Vitória',
+    qtdPassageiros: 1,
+    qtdMalas: 1,
+    modalidade: 'compartilhada',
+    distanciaKm: 260,
+    valorTotal: 45.00,
+    taxaReserva: 4.50,
+    valorLiquidoMotorista: 40.50,
+    valorRestanteEmbarque: 40.50,
+    taxaReservaPaga: true,
+    metodoPagamentoTaxa: 'PIX Instantâneo',
+    dataViagem: 'Amanhã',
+    horarioDesejado: 'Manhã (06h às 08h)',
     status: 'aguardando_motorista',
     criadoEm: 'Há 30 min'
+  },
+  {
+    id: 'SOL_LUCAS_06',
+    passageiroId: 'USR_LUCAS',
+    passageiroNome: 'Lucas Mendes',
+    passageiroTelefone: '(27) 99811-7722',
+    passageiroAvatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
+    cidadeOrigem: 'Água Doce do Norte',
+    cidadeDestino: 'Vitória',
+    enderecoEmbarque: 'Praça Três Poderes - Centro, Água Doce do Norte',
+    enderecoDesembarque: 'Shopping Vitória, Enseada do Suá, Vitória',
+    qtdPassageiros: 1,
+    qtdMalas: 1,
+    modalidade: 'compartilhada',
+    distanciaKm: 260,
+    valorTotal: 45.00,
+    taxaReserva: 4.50,
+    valorLiquidoMotorista: 40.50,
+    valorRestanteEmbarque: 40.50,
+    taxaReservaPaga: true,
+    metodoPagamentoTaxa: 'PIX Instantâneo',
+    dataViagem: 'Depois de amanhã',
+    horarioDesejado: 'Tarde (10h às 14h)',
+    status: 'aguardando_motorista',
+    criadoEm: 'Há 45 min'
   }
 ];
 
@@ -250,28 +322,89 @@ const INITIAL_DRIVER_PLAN: DriverTripPlan = {
 };
 
 // In-memory state with localStorage sync
+// Se estiver marcado como modo de produção limpo, inicia com zero corridas fictícias
+let isProductionClean: boolean = (() => {
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_IS_PROD_ZERO);
+    return val !== 'false'; // Por padrão, já inicia no modo Produção Limpa
+  } catch {
+    return true;
+  }
+})();
+
 let solicitacoesState: SolicitacaoViagem[] = loadSolicitacoes();
 let driverPlanState: DriverTripPlan = loadDriverPlan();
 let ofertasVagasState: OfertaVaga[] = loadOfertasVagas();
+
+export function isModoProducaoLimpa(): boolean {
+  return isProductionClean;
+}
+
+/**
+ * Zera completamente o banco local e sincroniza para produção limpa
+ */
+export function zerarAplicativoParaProducao() {
+  isProductionClean = true;
+  solicitacoesState = [];
+  ofertasVagasState = [];
+  driverPlanState = {
+    motoristaId: '',
+    motorista: MOTORISTA_JOSE,
+    cidadeOrigem: '',
+    cidadeDestino: '',
+    horarioSaida: '',
+    vagasDesejadas: 4,
+    vagasOcupadas: 0,
+    passageirosConfirmados: [],
+    paradasGeradas: []
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY_IS_PROD_ZERO, 'true');
+    localStorage.setItem(STORAGE_KEY_SOLICITACOES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_OFERTAS_VAGAS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEY_DRIVER_PLAN, JSON.stringify(driverPlanState));
+  } catch (e) {
+    console.warn('Erro ao salvar estado zerado:', e);
+  }
+
+  notifyListeners();
+}
+
+/**
+ * Carrega dados de demonstração para testes (caso o administrador queira ver exemplos)
+ */
+export function carregarDadosDemonstracao() {
+  isProductionClean = false;
+  solicitacoesState = [...INITIAL_DEFAULT_SOLICITACOES];
+  ofertasVagasState = [...INITIAL_DEFAULT_OFERTAS_VAGAS];
+  driverPlanState = { ...INITIAL_DRIVER_PLAN };
+
+  try {
+    localStorage.setItem(STORAGE_KEY_IS_PROD_ZERO, 'false');
+    localStorage.setItem(STORAGE_KEY_SOLICITACOES, JSON.stringify(solicitacoesState));
+    localStorage.setItem(STORAGE_KEY_OFERTAS_VAGAS, JSON.stringify(ofertasVagasState));
+    localStorage.setItem(STORAGE_KEY_DRIVER_PLAN, JSON.stringify(driverPlanState));
+  } catch (e) {
+    console.warn('Erro ao carregar dados demonstração:', e);
+  }
+
+  notifyListeners();
+}
 
 function loadSolicitacoes(): SolicitacaoViagem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SOLICITACOES);
     if (raw) {
       const parsed: SolicitacaoViagem[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Se Celso não estiver na lista (ex: cache antigo), garante que ele esteja disponível para o motorista
-        const hasCelso = parsed.some(s => s.passageiroNome.toLowerCase().includes('celso'));
-        if (!hasCelso) {
-          return [INITIAL_DEFAULT_SOLICITACOES[0], ...parsed];
-        }
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
   } catch (e) {
     console.warn('Erro ao ler localStorage de solicitações:', e);
   }
-  return [...INITIAL_DEFAULT_SOLICITACOES];
+  return isProductionClean ? [] : [...INITIAL_DEFAULT_SOLICITACOES];
 }
 
 function loadDriverPlan(): DriverTripPlan {
@@ -283,19 +416,38 @@ function loadDriverPlan(): DriverTripPlan {
   } catch (e) {
     console.warn('Erro ao ler localStorage do driver plan:', e);
   }
-  return INITIAL_DRIVER_PLAN;
+  return isProductionClean ? {
+    motoristaId: '',
+    motorista: MOTORISTA_JOSE,
+    cidadeOrigem: '',
+    cidadeDestino: '',
+    horarioSaida: '',
+    vagasDesejadas: 4,
+    vagasOcupadas: 0,
+    passageirosConfirmados: [],
+    paradasGeradas: []
+  } : INITIAL_DRIVER_PLAN;
 }
 
 function loadOfertasVagas(): OfertaVaga[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_OFERTAS_VAGAS);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map(v => ({
+          ...v,
+          passageirosReservados: Array.isArray(v.passageirosReservados) ? v.passageirosReservados : []
+        }));
+      }
     }
   } catch (e) {
     console.warn('Erro ao ler localStorage de ofertas de vagas:', e);
   }
-  return [...INITIAL_DEFAULT_OFERTAS_VAGAS];
+  return isProductionClean ? [] : INITIAL_DEFAULT_OFERTAS_VAGAS.map(v => ({
+    ...v,
+    passageirosReservados: Array.isArray(v.passageirosReservados) ? v.passageirosReservados : []
+  }));
 }
 
 function saveState() {
@@ -930,7 +1082,8 @@ export function publicarOfertaVaga(
     vagasDisponiveis: dados.vagasDisponiveis !== undefined ? dados.vagasDisponiveis : dados.vagasTotais,
     id: `OFR_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     status: 'ativa',
-    criadoEm: 'Agora'
+    criadoEm: 'Agora',
+    passageirosReservados: dados.passageirosReservados || []
   };
 
   ofertasVagasState = [novaVaga, ...ofertasVagasState];
@@ -1073,7 +1226,7 @@ export async function reservarVagaMotorista(
     valorRestanteEmbarque: valorTotal,
     taxaReservaPaga: true,
     metodoPagamentoTaxa: 'PIX Instantâneo',
-    horarioDesejado: vaga.turno === 'manha' ? '08:00' : vaga.turno === 'tarde' ? '14:00' : '19:00',
+    horarioDesejado: vaga.turno === 'manha' ? 'Manhã (06h às 08h)' : vaga.turno === 'tarde' ? 'Tarde (10h às 14h)' : 'Tarde (14h às 18h)',
     turno: vaga.turno,
     status: 'confirmada', // Confirmada! Vai direto para o WhatsApp
     motoristaId: vaga.motoristaId,

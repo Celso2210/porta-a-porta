@@ -40,6 +40,7 @@ import { db } from '../../lib/firebase';
 import { getPaymentConfig, savePaymentConfig, subscribePaymentConfig, gerarPayloadPixCopiaECola } from '../../services/paymentConfig';
 import { getAllDriversDocs, getAllPassengersDocs, subscribeToDocuments } from '../../services/documentService';
 import { AdminDocumentosAuditoria } from './AdminDocumentosAuditoria';
+import { zerarAplicativoParaProducao, carregarDadosDemonstracao, isModoProducaoLimpa } from '../../services/tripStore';
 import QRCode from 'qrcode';
 
 interface AdminDashboardProps {
@@ -80,6 +81,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [previewQrCodeUrl, setPreviewQrCodeUrl] = useState<string>('');
   const [previewPixPayload, setPreviewPixPayload] = useState<string>('');
   const [copiadoPreview, setCopiadoPreview] = useState<boolean>(false);
+  const [isCleanMode, setIsCleanMode] = useState<boolean>(isModoProducaoLimpa());
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [launchFeedback, setLaunchFeedback] = useState<string | null>(null);
+
+  const handleConfirmZerar = () => {
+    zerarAplicativoParaProducao();
+    setIsCleanMode(true);
+    setShowConfirmModal(false);
+    setLaunchFeedback('Aplicativo zerado com sucesso para LANÇAMENTO EM PRODUÇÃO!');
+    setTimeout(() => setLaunchFeedback(null), 5000);
+  };
+
+  const handleRestaurarDemo = () => {
+    carregarDadosDemonstracao();
+    setIsCleanMode(false);
+    setLaunchFeedback('Dados de demonstração restaurados.');
+    setTimeout(() => setLaunchFeedback(null), 4000);
+  };
 
   useEffect(() => {
     const unsub = subscribePaymentConfig((cfg) => {
@@ -258,16 +277,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {isCleanMode ? (
+            <div className="flex items-center gap-2">
+              <span className="py-1.5 px-3 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Ambiente Limpo (Produção Ativa)</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleRestaurarDemo}
+                className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold border border-slate-200 transition-colors"
+                title="Carregar dados de demonstração para testes rápidos"
+              >
+                Restaurar Dados Demo
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              id="btn-zerar-para-producao"
+              onClick={() => setShowConfirmModal(true)}
+              className="py-2 px-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md transition-all cursor-pointer animate-pulse"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Procedimento de Lançamento (Zerar App)</span>
+            </button>
+          )}
+
           <button
             onClick={exportJSON}
-            className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-200 transition-colors"
+            className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-200 transition-colors"
           >
             <Download className="w-4 h-4 text-blue-600" />
-            <span>Exportar JSON da Coleção</span>
+            <span>Exportar JSON</span>
           </button>
         </div>
       </div>
+
+      {/* Banner de feedback de lançamento */}
+      {launchFeedback && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-3 shadow-xs">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span>{launchFeedback}</span>
+        </div>
+      )}
+
+      {/* Modal de Confirmação para Procedimento de Lançamento */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 mx-auto">
+              <Sparkles className="w-6 h-6 text-red-600" />
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-black text-slate-900">Confirmar Procedimento de Lançamento?</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Esta ação vai <strong>zerar todas as corridas fictícias</strong>, ofertas de teste e dados simulados, deixando o sistema 100% pronto e limpo para os primeiros passageiros e motoristas reais se cadastrarem.
+              </p>
+            </div>
+
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-[11px] text-amber-800 space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" /> O que será feito:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-700 pl-1">
+                <li>Limpeza do histórico de chamados de teste</li>
+                <li>Zerar ofertas de vagas simuladas</li>
+                <li>Ambiente limpo pronto para produção</li>
+              </ul>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                id="btn-confirmar-zerar"
+                onClick={handleConfirmZerar}
+                className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-md transition-colors"
+              >
+                Sim, Zerar e Lançar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Seletor de Seções Administrativas */}
       <div className="flex items-center gap-2 bg-slate-200/70 p-1.5 rounded-2xl overflow-x-auto">

@@ -280,6 +280,7 @@ export interface SolicitacaoViagem {
   valorRestanteEmbarque: number; // 90% a ser pago no embarque/desembarque
   taxaReservaPaga: boolean;
   metodoPagamentoTaxa?: string;
+  dataViagem?: string;
   horarioDesejado: string;
   turno?: TurnoViagem;
   status: 

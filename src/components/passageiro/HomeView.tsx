@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   MapPin, 
   Users, 
+  User,
   Briefcase,
   Car, 
   ArrowRight,
+  ArrowLeft,
   CheckCircle2,
   LocateFixed,
   Loader2,
@@ -16,7 +18,10 @@ import {
   Sparkles,
   Calendar,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Crown,
+  ChevronRight
 } from 'lucide-react';
 import { CIDADES_MOCK } from '../../data/mockData';
 import { TariffConfig } from '../../types';
@@ -27,6 +32,7 @@ import {
 } from '../../services/routeCalculator';
 import { buscarSugestoesEndereco, SugestaoEndereco } from '../../services/addressSuggestions';
 import { PassageiroDocumentosModal } from './PassageiroDocumentosModal';
+import { TimePickerModal } from '../common/TimePickerModal';
 import { getPassageiroDocs, subscribeToDocuments } from '../../services/documentService';
 
 interface HomeViewProps {
@@ -41,18 +47,21 @@ interface HomeViewProps {
     modalidade: 'compartilhada' | 'exclusiva';
     distanciaKm: number;
     agendamento: string;
+    dataViagem?: string;
     precoEstimado: number;
     taxaReserva: number;
     valorRestanteEmbarque: number;
     precoPorKmAplicado: number;
   }) => void;
   userName?: string;
+  onOpenLogin?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ 
   tariffConfig = { precoKmCompartilhada: 0.60, precoKmExclusiva: 2.40 }, 
   onSolicitar, 
-  userName = 'Celso' 
+  userName = 'Celso',
+  onOpenLogin
 }) => {
   // 1. Tipo de Viagem (Compartilhada ou Exclusiva) - Escolhido primeiro
   const [modalidade, setModalidade] = useState<'compartilhada' | 'exclusiva'>('compartilhada');
@@ -65,14 +74,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [distanciaKm, setDistanciaKm] = useState<number>(0);
   const [erroRota, setErroRota] = useState<string | null>(null);
 
+  // Etapa atual do fluxo inicial (1: Tipo de viagem e endereços | 2: Data, horário e passageiros)
+  const [etapaAtual, setEtapaAtual] = useState<1 | 2>(1);
+
   // Validações de preenchimento real dos pontos de partida e chegada
   const temOrigem = Boolean(origemCompleta.trim());
   const temDestino = Boolean(destinoCompleto.trim());
   const rotaDefinida = temOrigem && temDestino && distanciaKm > 0;
 
-  // 3. Quando viajar (Hoje ou Agendado / Manhã ou Tarde)
-  const [modoAgendamento, setModoAgendamento] = useState<'hoje' | 'agendar'>('hoje');
+  // 3. Quando viajar (Hoje, Amanhã ou Outra Data / Manhã, Tarde ou Noite)
+  const [modoAgendamento, setModoAgendamento] = useState<'hoje' | 'amanha' | 'agendar'>('hoje');
   const [turnoHorario, setTurnoHorario] = useState<'manha' | 'tarde' | 'noite'>('manha');
+  // Horário livre escolhido pelo passageiro na viagem exclusiva (sem horário pré-definido)
+  const [horarioExclusivo, setHorarioExclusivo] = useState<string>('');
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [dataAgendada, setDataAgendada] = useState(() => {
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
@@ -246,40 +261,77 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const taxaReserva = rotaDefinida ? resultadoTarifa.taxaReserva : 0;
   const valorRestanteEmbarque = rotaDefinida ? resultadoTarifa.valorRestanteEmbarque : 0;
 
-  const handleContinuar = () => {
+  // Função que busca a rota e abre a segunda página (Etapa 2)
+  const handleBuscar = () => {
     if (!temOrigem && !temDestino) {
-      setErroRota('Por favor, informe o endereço de embarque e o endereço de destino para calcular a corrida.');
+      setErroRota('Por favor, informe o endereço de embarque e o endereço de destino.');
       return;
     }
     if (!temOrigem) {
-      setErroRota('Por favor, informe o endereço de embarque (onde o motorista irá te buscar).');
+      setErroRota('Por favor, informe o endereço de embarque onde você está.');
       return;
     }
     if (!temDestino) {
-      setErroRota('Por favor, informe o endereço de destino (para onde você deseja ir).');
+      setErroRota('Por favor, informe o endereço de destino para onde deseja ir.');
       return;
     }
+
     if (!rotaDefinida) {
-      setErroRota('Não foi possível calcular a rota. Por favor, verifique os endereços informados.');
+      const res = calcularDistanciaEntreLocais(origemCompleta, destinoCompleto);
+      if (res.distanciaKm > 0) {
+        setDistanciaKm(res.distanciaKm);
+        if (res.cidadeOrigemDetectada) setCidadeOrigem(res.cidadeOrigemDetectada);
+        if (res.cidadeDestinoDetectada) setCidadeDestino(res.cidadeDestinoDetectada);
+      } else {
+        setErroRota('Não conseguimos calcular a rota. Verifique os endereços informados.');
+        return;
+      }
+    }
+
+    setErroRota(null);
+    setEtapaAtual(2);
+  };
+
+  const handleContinuar = () => {
+    if (!temOrigem || !temDestino || !rotaDefinida) {
+      setErroRota('Verifique os endereços informados na primeira etapa.');
+      setEtapaAtual(1);
       return;
     }
 
     setErroRota(null);
 
-    const turnoLabel = turnoHorario === 'manha' 
-      ? 'Manhã (06h às 12h)' 
-      : turnoHorario === 'tarde' 
-      ? 'Tarde (12h às 16h)' 
-      : 'Noite (16h às 20h)';
-
     let agendamentoTexto = '';
-    if (modoAgendamento === 'hoje') {
-      agendamentoTexto = `Hoje: ${turnoLabel}`;
+    if (modalidade === 'exclusiva') {
+      const horaFormatada = horarioExclusivo ? `às ${horarioExclusivo}` : '';
+      if (modoAgendamento === 'hoje') {
+        agendamentoTexto = horaFormatada ? `Hoje ${horaFormatada}` : 'Hoje (Horário a combinar)';
+      } else if (modoAgendamento === 'amanha') {
+        agendamentoTexto = horaFormatada ? `Amanhã ${horaFormatada}` : 'Amanhã (Horário a combinar)';
+      } else {
+        const parts = (dataAgendada || '').split('-');
+        const dataFormatada = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (dataAgendada || '');
+        agendamentoTexto = horaFormatada ? `${dataFormatada} ${horaFormatada}` : dataFormatada;
+      }
     } else {
-      const parts = dataAgendada.split('-');
-      const dataFormatada = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataAgendada;
-      agendamentoTexto = `${dataFormatada}: ${turnoLabel}`;
+      const turnoLabel = turnoHorario === 'manha' 
+        ? 'Manhã (06h às 08h)' 
+        : turnoHorario === 'tarde' 
+        ? 'Tarde (10h às 14h)' 
+        : 'Tarde (14h às 18h)';
+
+      if (modoAgendamento === 'hoje') {
+        agendamentoTexto = turnoLabel;
+      } else if (modoAgendamento === 'amanha') {
+        agendamentoTexto = `Amanhã • ${turnoLabel}`;
+      } else {
+        const parts = (dataAgendada || '').split('-');
+        const dataFormatada = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (dataAgendada || '');
+        agendamentoTexto = `${dataFormatada} • ${turnoLabel}`;
+      }
     }
+
+    const dataViagemFinal = modoAgendamento === 'hoje' ? 'Hoje' : modoAgendamento === 'amanha' ? 'Amanhã' : dataAgendada;
 
     onSolicitar({
       origem: cidadeOrigem || 'Origem',
@@ -291,6 +343,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       modalidade,
       distanciaKm,
       agendamento: agendamentoTexto,
+      dataViagem: dataViagemFinal,
       precoEstimado: valorTotal,
       taxaReserva,
       valorRestanteEmbarque,
@@ -299,524 +352,676 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col justify-between min-h-[600px] h-full p-4 sm:p-5 bg-gradient-to-b from-slate-100/90 via-slate-50 to-blue-50/30 text-slate-900 rounded-3xl border border-slate-200/90 shadow-md relative overflow-hidden space-y-4">
-      <div className="space-y-4">
-        {/* Top Header */}
-        <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-          <div>
-            <span className="text-xs font-black tracking-widest text-blue-600 uppercase flex items-center gap-1">
-              <Car className="w-3.5 h-3.5" /> PORTA A PORTA
-            </span>
-            <h1 className="text-base sm:text-lg font-light text-slate-900 mt-0.5">
-              Olá, <span className="font-extrabold text-blue-600">{userName}</span>
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDocModal(true)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
-                passDocs.statusGeral === 'aprovado'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                  : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-              }`}
-              title="Clique para gerenciar foto e documento de identificação"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>{passDocs.statusGeral === 'aprovado' ? 'Cadastro Verificado' : 'Validar Documentos'}</span>
-            </button>
-
-            {rotaDefinida ? (
-              <span className="text-[10px] font-extrabold bg-blue-100/90 text-blue-800 px-2.5 py-1 rounded-full border border-blue-200/80 shadow-2xs animate-in fade-in">
-                {distanciaKm} km
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full border border-slate-200">
-                Aguardando rota
-              </span>
-            )}
-          </div>
+    <div className="flex flex-col justify-between h-auto p-3 sm:p-4 bg-gradient-to-b from-slate-100/90 via-slate-50 to-blue-50/30 text-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm relative overflow-hidden space-y-2.5">
+      {/* Top Header Compacto */}
+      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/80">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-black tracking-widest text-blue-600 uppercase flex items-center gap-1">
+            <Car className="w-3.5 h-3.5" /> PORTA A PORTA
+          </span>
+          <span className="text-xs text-slate-400 font-light">•</span>
+          <h1 className="text-xs sm:text-sm font-light text-slate-900">
+            Olá, <span className="font-black text-blue-600">{userName}</span>
+          </h1>
         </div>
 
-        {/* 1. O QUE A PESSOA ESCOLHE PRIMEIRO: COMPARTILHADA OU EXCLUSIVA */}
-        <div>
-          <label className="text-[11px] uppercase tracking-wider text-slate-700 font-extrabold mb-1.5 flex items-center justify-between">
-            <span>1. Escolha o Tipo de Viagem</span>
-            <span className="text-[10px] font-semibold text-slate-500 lowercase">toque para selecionar</span>
-          </label>
-
-          <div className="grid grid-cols-2 gap-2">
-            {/* Opção Compartilhada */}
+        <div className="flex items-center gap-1.5">
+          {onOpenLogin && (
             <button
               type="button"
-              onClick={() => setModalidade('compartilhada')}
-              className={`p-2.5 sm:p-3 rounded-xl text-left transition-all relative flex flex-col justify-between ${
-                modalidade === 'compartilhada'
-                  ? 'bg-blue-600 border-2 border-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
-                  : 'bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-              }`}
+              id="btn-home-abrir-login"
+              onClick={onOpenLogin}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer"
+              title="Abrir Tela de Login e Editar Fotos"
             >
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={`text-xs sm:text-sm font-black ${modalidade === 'compartilhada' ? 'text-white' : 'text-slate-900'}`}>
+              <User className="w-3 h-3 text-emerald-600 shrink-0" />
+              <span>Login / Fotos</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowDocModal(true)}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+              passDocs.statusGeral === 'aprovado'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-amber-50 text-amber-800 border-amber-300'
+            }`}
+            title="Verificar documentos"
+          >
+            <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+            <span>{passDocs.statusGeral === 'aprovado' ? 'Verificado' : 'Validar Doc'}</span>
+          </button>
+
+          {rotaDefinida && (
+            <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+              {distanciaKm} km
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* ETAPA 1: TIPO DE VIAGEM + ENDEREÇOS + BOTÃO BUSCAR NA BARRA */}
+      {/* ========================================================= */}
+      {etapaAtual === 1 && (
+        <div className="space-y-2.5 animate-in fade-in duration-150">
+          {/* Escolha o Tipo de Viagem */}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-slate-600 font-extrabold mb-1 flex items-center justify-between">
+              <span>Escolha o Tipo de Viagem</span>
+              <span className="text-[9.5px] font-normal text-slate-400">toque para selecionar</span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              {/* Opção Compartilhada */}
+              <button
+                type="button"
+                id="btn-modalidade-compartilhada"
+                onClick={() => setModalidade('compartilhada')}
+                className={`p-2 sm:p-2.5 rounded-xl text-left transition-all relative flex flex-col justify-center cursor-pointer border ${
+                  modalidade === 'compartilhada'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs ring-2 ring-blue-500/20'
+                    : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <span className={`text-xs sm:text-sm font-black tracking-tight ${
+                    modalidade === 'compartilhada' ? 'text-white' : 'text-slate-900'
+                  }`}>
                     Compartilhada
                   </span>
                   {modalidade === 'compartilhada' && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
                   )}
                 </div>
-                <div className={`text-[11px] font-black px-1.5 py-0.5 rounded inline-block mb-1 ${
-                  modalidade === 'compartilhada' ? 'bg-white text-blue-700 shadow-2xs' : 'bg-blue-100/80 text-blue-800'
-                }`}>
-                  R$ {precoKmCompartilhada.toFixed(2).replace('.', ',')} / km
+                <div>
+                  <span className={`text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-md inline-block ${
+                    modalidade === 'compartilhada' 
+                      ? 'bg-white text-blue-700 shadow-2xs' 
+                      : 'bg-blue-50 text-blue-700 border border-blue-200/80'
+                  }`}>
+                    0,60 km
+                  </span>
                 </div>
-              </div>
-              <p className={`text-[9.5px] font-medium leading-tight ${modalidade === 'compartilhada' ? 'text-blue-100' : 'text-slate-500'}`}>
-                Passagem individual por vaga
-              </p>
-            </button>
+              </button>
 
-            {/* Opção Exclusiva */}
-            <button
-              type="button"
-              onClick={() => {
-                setModalidade('exclusiva');
-                if (passageiros > 4) setPassageiros(4);
-              }}
-              className={`p-2.5 sm:p-3 rounded-xl text-left transition-all relative flex flex-col justify-between ${
-                modalidade === 'exclusiva'
-                  ? 'bg-blue-600 border-2 border-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
-                  : 'bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={`text-xs sm:text-sm font-black ${modalidade === 'exclusiva' ? 'text-white' : 'text-slate-900'}`}>
+              {/* Opção Exclusiva */}
+              <button
+                type="button"
+                id="btn-modalidade-exclusiva"
+                onClick={() => {
+                  setModalidade('exclusiva');
+                  if (passageiros > 4) setPassageiros(4);
+                }}
+                className={`p-2 sm:p-2.5 rounded-xl text-left transition-all relative flex flex-col justify-center cursor-pointer border ${
+                  modalidade === 'exclusiva'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs ring-2 ring-blue-500/20'
+                    : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <span className={`text-xs sm:text-sm font-black tracking-tight ${
+                    modalidade === 'exclusiva' ? 'text-white' : 'text-slate-900'
+                  }`}>
                     Exclusiva
                   </span>
                   {modalidade === 'exclusiva' && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
                   )}
                 </div>
-                <div className={`text-[11px] font-black px-1.5 py-0.5 rounded inline-block mb-1 ${
-                  modalidade === 'exclusiva' ? 'bg-white text-blue-700 shadow-2xs' : 'bg-blue-100/80 text-blue-800'
-                }`}>
-                  R$ {precoKmExclusiva.toFixed(2).replace('.', ',')} / km
+                <div>
+                  <span className={`text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-md inline-block ${
+                    modalidade === 'exclusiva' 
+                      ? 'bg-white text-blue-700 shadow-2xs' 
+                      : 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                  }`}>
+                    2,4 km
+                  </span>
                 </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Endereços: Embarque, Destino e Botão Buscar na Barra */}
+          <div className="bg-slate-100/90 border border-slate-200/90 p-2.5 sm:p-3 rounded-2xl space-y-2 shadow-2xs">
+            <label className="text-[10px] uppercase tracking-wider text-slate-600 font-extrabold block">
+              Endereços de Embarque e Destino
+            </label>
+
+            {/* Endereço de Embarque / Origem */}
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[9.5px] font-extrabold text-slate-600 uppercase flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                  Embarque (Origem)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleUsarMinhaLocalizacao}
+                  disabled={isLocating}
+                  className="text-[9.5px] font-extrabold text-emerald-800 bg-emerald-100 hover:bg-emerald-200/80 border border-emerald-300 px-1.5 py-0.5 rounded-md flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                  title="Detectar meu endereço atual via GPS"
+                >
+                  {isLocating ? (
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-700" />
+                  ) : (
+                    <LocateFixed className="w-2.5 h-2.5 text-emerald-700" />
+                  )}
+                  <span>{isLocating ? 'Buscando...' : 'Usar GPS'}</span>
+                </button>
               </div>
-              <p className={`text-[9.5px] font-medium leading-tight ${modalidade === 'exclusiva' ? 'text-blue-100' : 'text-slate-500'}`}>
-                Carro fechado (até 4 pessoas)
-              </p>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={origemCompleta}
+                  onFocus={() => setFocoOrigem(true)}
+                  onBlur={() => setTimeout(() => setFocoOrigem(false), 200)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOrigemCompleta(val);
+                    setFocoOrigem(true);
+                    const res = calcularDistanciaEntreLocais(val, destinoCompleto);
+                    setDistanciaKm(res.distanciaKm);
+                    if (res.cidadeOrigemDetectada) setCidadeOrigem(res.cidadeOrigemDetectada);
+                  }}
+                  placeholder="Ex: Rua São José, 142 - Centro, Água Doce do Norte"
+                  className="w-full pl-2.5 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/20 transition-all shadow-xs"
+                />
+
+                {/* Sugestões de Embarque */}
+                {focoOrigem && sugestoesOrigem.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-100 animate-in fade-in duration-100">
+                    <div className="max-h-40 overflow-y-auto">
+                      {sugestoesOrigem.map((sug) => (
+                        <button
+                          key={sug.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleSelecionarSugestaoOrigem(sug)}
+                          className="w-full px-2.5 py-1.5 text-left hover:bg-blue-50/80 flex items-start gap-2 transition-colors"
+                        >
+                          <div className="mt-0.5 p-0.5 bg-slate-100 rounded shrink-0">
+                            {renderIconeSugestao(sug.iconeTipo)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-800 truncate">{sug.titulo}</p>
+                            <p className="text-[9.5px] text-slate-500 truncate">{sug.subtitulo}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Endereço de Destino */}
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[9.5px] font-extrabold text-slate-600 uppercase flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
+                  Destino (Chegada)
+                </span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={destinoCompleto}
+                  onFocus={() => setFocoDestino(true)}
+                  onBlur={() => setTimeout(() => setFocoDestino(false), 200)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDestinoCompleto(val);
+                    setFocoDestino(true);
+                    const res = calcularDistanciaEntreLocais(origemCompleta, val);
+                    setDistanciaKm(res.distanciaKm);
+                    if (res.cidadeDestinoDetectada) setCidadeDestino(res.cidadeDestinoDetectada);
+                  }}
+                  placeholder="Ex: Av. Américo Buaiz, 200 - Enseada do Suá, Vitória"
+                  className="w-full pl-2.5 pr-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/20 transition-all shadow-xs"
+                />
+
+                {/* Sugestões de Destino */}
+                {focoDestino && sugestoesDestino.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-100 animate-in fade-in duration-100">
+                    <div className="max-h-40 overflow-y-auto">
+                      {sugestoesDestino.map((sug) => (
+                        <button
+                          key={sug.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleSelecionarSugestaoDestino(sug)}
+                          className="w-full px-2.5 py-1.5 text-left hover:bg-emerald-50/80 flex items-start gap-2 transition-colors"
+                        >
+                          <div className="mt-0.5 p-0.5 bg-slate-100 rounded shrink-0">
+                            {renderIconeSugestao(sug.iconeTipo)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-800 truncate">{sug.titulo}</p>
+                            <p className="text-[9.5px] text-slate-500 truncate">{sug.subtitulo}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Status da Rota Compacto (se calculada) */}
+            {rotaDefinida && (
+              <div className="flex items-center justify-between p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-bold">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>{distanciaKm} km rodados</span>
+                </span>
+                <span className="text-[10.5px] text-emerald-700 font-semibold truncate ml-1">
+                  {cidadeOrigem || 'Origem'} ➔ {cidadeDestino || 'Destino'}
+                </span>
+              </div>
+            )}
+
+            {/* BOTÃO BUSCAR NA BARRA DE ENDEREÇO (Abre a Segunda Página) */}
+            <button
+              type="button"
+              id="btn-buscar-corrida"
+              onClick={handleBuscar}
+              className="w-full mt-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-200 transition-all active:scale-[0.99] cursor-pointer"
+            >
+              <Search className="w-4 h-4" />
+              <span>Buscar</span>
             </button>
           </div>
+
+          {/* Erro de validação se houver */}
+          {erroRota && (
+            <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px] font-bold flex items-center gap-1.5 animate-in fade-in">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span>{erroRota}</span>
+            </div>
+          )}
         </div>
+      )}
 
-        {/* 2. ENDEREÇOS: EMBARQUE E DESEMBARQUE */}
-        <div className="bg-slate-100/90 border border-slate-200/90 p-3.5 rounded-2xl space-y-3 shadow-2xs">
-          <label className="text-[11px] uppercase tracking-wider text-slate-700 font-extrabold block">
-            2. Endereços de Embarque e Chegada
-          </label>
-
-          {/* Endereço de Embarque / Origem */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-extrabold text-slate-600 uppercase flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-                Endereço de Embarque (Origem)
-              </span>
-              <button
-                type="button"
-                onClick={handleUsarMinhaLocalizacao}
-                disabled={isLocating}
-                className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 hover:bg-emerald-200/80 border border-emerald-300 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all active:scale-95 disabled:opacity-50 shadow-2xs"
-                title="Detectar meu endereço atual via GPS"
-              >
-                {isLocating ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-emerald-700" />
-                ) : (
-                  <LocateFixed className="w-3 h-3 text-emerald-700" />
-                )}
-                <span>{isLocating ? 'Buscando...' : 'Usar GPS'}</span>
-              </button>
-            </div>
-
-            <div className="relative">
-              <input
-                type="text"
-                value={origemCompleta}
-                onFocus={() => setFocoOrigem(true)}
-                onBlur={() => setTimeout(() => setFocoOrigem(false), 200)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setOrigemCompleta(val);
-                  setFocoOrigem(true);
-                  const res = calcularDistanciaEntreLocais(val, destinoCompleto);
-                  setDistanciaKm(res.distanciaKm);
-                  if (res.cidadeOrigemDetectada) setCidadeOrigem(res.cidadeOrigemDetectada);
-                }}
-                placeholder="Ex: Rua São José, 142 - Centro, Água Doce do Norte - ES"
-                className="w-full pl-3 pr-9 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 transition-all shadow-xs"
-              />
-              <button
-                type="button"
-                onClick={handleUsarMinhaLocalizacao}
-                disabled={isLocating}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-emerald-600"
-              >
-                <LocateFixed className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Sugestões de Embarque */}
-              {focoOrigem && sugestoesOrigem.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden divide-y divide-slate-100 animate-in fade-in duration-150">
-                  <div className="px-3 py-1.5 bg-slate-50 flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <Search className="w-3 h-3 text-blue-600" /> Sugestões de Embarque
-                    </span>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {sugestoesOrigem.map((sug) => (
-                      <button
-                        key={sug.id}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleSelecionarSugestaoOrigem(sug)}
-                        className="w-full px-3 py-2 text-left hover:bg-blue-50/80 flex items-start gap-2 transition-colors"
-                      >
-                        <div className="mt-0.5 p-1 bg-slate-100 rounded-md shrink-0">
-                          {renderIconeSugestao(sug.iconeTipo)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-800 truncate">{sug.titulo}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{sug.subtitulo}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Endereço de Desembarque / Chegada */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-extrabold text-slate-600 uppercase flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-600"></div>
-                Endereço de Chegada (Destino)
-              </span>
-            </div>
-            <div className="relative">
-              <input
-                type="text"
-                value={destinoCompleto}
-                onFocus={() => setFocoDestino(true)}
-                onBlur={() => setTimeout(() => setFocoDestino(false), 200)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDestinoCompleto(val);
-                  setFocoDestino(true);
-                  const res = calcularDistanciaEntreLocais(origemCompleta, val);
-                  setDistanciaKm(res.distanciaKm);
-                  if (res.cidadeDestinoDetectada) setCidadeDestino(res.cidadeDestinoDetectada);
-                }}
-                placeholder="Ex: Av. Américo Buaiz, 200 - Enseada do Suá, Vitória - ES"
-                className="w-full pl-3 pr-3 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 transition-all shadow-xs"
-              />
-
-              {/* Sugestões de Chegada */}
-              {focoDestino && sugestoesDestino.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden divide-y divide-slate-100 animate-in fade-in duration-150">
-                  <div className="px-3 py-1.5 bg-slate-50 flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <Search className="w-3 h-3 text-emerald-600" /> Sugestões de Destino
-                    </span>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {sugestoesDestino.map((sug) => (
-                      <button
-                        key={sug.id}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleSelecionarSugestaoDestino(sug)}
-                        className="w-full px-3 py-2 text-left hover:bg-emerald-50/80 flex items-start gap-2 transition-colors"
-                      >
-                        <div className="mt-0.5 p-1 bg-slate-100 rounded-md shrink-0">
-                          {renderIconeSugestao(sug.iconeTipo)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-800 truncate">{sug.titulo}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{sug.subtitulo}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Feedback de Status da Rota */}
-          {rotaDefinida ? (
-            <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold animate-in fade-in">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Distância: {distanciaKm} km rodados</span>
-              </span>
-              <span className="text-[11px] text-emerald-700 font-semibold truncate ml-2">
+      {/* ========================================================= */}
+      {/* ETAPA 2: HORÁRIO, PASSAGEIROS, MALAS E O VALOR DA CORRIDA */}
+      {/* ========================================================= */}
+      {etapaAtual === 2 && (
+        <div className="space-y-2.5 animate-in fade-in duration-150">
+          {/* Card Resumo da Viagem com botão para Voltar/Alterar */}
+          <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-2 sm:p-2.5 flex items-center justify-between shadow-2xs">
+            <div className="min-w-0 pr-2">
+              <div className="flex items-center gap-1 mb-0.5">
+                <span className="text-[9.5px] font-black uppercase tracking-wider bg-blue-600 text-white px-1.5 py-0.2 rounded">
+                  {modalidade === 'exclusiva' ? 'Exclusiva (2,4 km)' : 'Compartilhada (0,60 km)'}
+                </span>
+                <span className="text-[10px] font-extrabold text-blue-800">
+                  {distanciaKm} km
+                </span>
+              </div>
+              <p className="text-xs font-bold text-slate-800 truncate">
                 {cidadeOrigem || 'Origem'} ➔ {cidadeDestino || 'Destino'}
-              </span>
+              </p>
             </div>
-          ) : temOrigem && !temDestino ? (
-            <div className="flex items-center gap-1.5 p-2 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>Origem informada. Agora informe o endereço de chegada para calcularmos o valor.</span>
-            </div>
-          ) : !temOrigem && temDestino ? (
-            <div className="flex items-center gap-1.5 p-2 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>Destino informado. Agora informe o endereço de embarque onde você está.</span>
+
+            <button
+              type="button"
+              onClick={() => setEtapaAtual(1)}
+              className="text-[10.5px] font-extrabold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg shadow-2xs shrink-0 cursor-pointer"
+            >
+              Alterar
+            </button>
+          </div>
+
+          {/* Data e Horário da Viagem (Exclusiva ou Compartilhada) */}
+          {modalidade === 'exclusiva' ? (
+            <div className="bg-slate-100/90 border border-slate-200/90 p-2.5 rounded-xl space-y-2.5 shadow-2xs">
+              <label className="text-[10px] uppercase tracking-wider text-slate-600 font-extrabold block">
+                Data e Horário de Saída (Viagem Exclusiva)
+              </label>
+
+              {/* Escolha da Data: Hoje, Amanhã ou Outra Data */}
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  id="btn-exclusiva-hoje"
+                  onClick={() => setModoAgendamento('hoje')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                    modoAgendamento === 'hoje'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Hoje</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-exclusiva-amanha"
+                  onClick={() => setModoAgendamento('amanha')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                    modoAgendamento === 'amanha'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Amanhã</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-exclusiva-agendar"
+                  onClick={() => setModoAgendamento('agendar')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    modoAgendamento === 'agendar'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>Outra Data</span>
+                </button>
+              </div>
+
+              {modoAgendamento === 'agendar' && (
+                <input
+                  type="date"
+                  id="input-data-exclusiva"
+                  value={dataAgendada}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDataAgendada(e.target.value)}
+                  className="w-full bg-white border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs text-blue-900 font-bold focus:outline-none focus:border-blue-600"
+                />
+              )}
+
+              {/* Horário de Saída livre para o passageiro escolher com clique intuitivo */}
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Horário de Saída</span>
+                  </label>
+                  {horarioExclusivo && (
+                    <button
+                      type="button"
+                      onClick={() => setHorarioExclusivo('')}
+                      className="text-[10.5px] text-slate-400 hover:text-red-500 font-bold transition-colors cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+
+                {/* Botão intuitivo: clica e abre o seletor visual com horas e minutos */}
+                <button
+                  type="button"
+                  id="btn-abrir-seletor-horario"
+                  onClick={() => setShowTimePicker(true)}
+                  className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer group text-left ${
+                    horarioExclusivo
+                      ? 'bg-blue-50/70 border-blue-300 hover:border-blue-500 hover:bg-blue-50'
+                      : 'bg-slate-50 hover:bg-slate-100/90 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                      horarioExclusivo
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-200 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
+                    }`}>
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-500">
+                        Hora pretendida de saída:
+                      </div>
+                      {horarioExclusivo ? (
+                        <div className="text-base font-black text-blue-950 flex items-center gap-2">
+                          <span>{horarioExclusivo}</span>
+                          <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200">
+                            Selecionado
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-xs font-black text-blue-600 flex items-center gap-1">
+                          <span>Toque para escolher o horário</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs font-extrabold text-slate-500 group-hover:text-blue-700">
+                    <span>{horarioExclusivo ? 'Alterar' : 'Escolher'}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Digite os endereços de embarque e destino para calcular a rota e o valor da corrida.</span>
-            </div>
-          )}
-        </div>
-
-        {/* 3. QUANDO: HOJE OU AGENDADO / MANHÃ OU TARDE */}
-        <div className="bg-slate-100/90 border border-slate-200/90 p-3.5 rounded-2xl space-y-3 shadow-2xs">
-          <label className="text-[11px] uppercase tracking-wider text-slate-700 font-extrabold block">
-            3. Data e Horário da Viagem
-          </label>
-
-          {/* Escolha: Hoje ou Agendado */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setModoAgendamento('hoje')}
-              className={`py-2 px-3 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                modoAgendamento === 'hoje'
-                  ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/20'
-                  : 'bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>Hoje</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setModoAgendamento('agendar')}
-              className={`py-2 px-3 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                modoAgendamento === 'agendar'
-                  ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/20'
-                  : 'bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Agendar Outra Data</span>
-            </button>
-          </div>
-
-          {modoAgendamento === 'agendar' && (
-            <div className="p-2.5 bg-blue-50/90 border border-blue-200/90 rounded-xl animate-in fade-in duration-150">
-              <label className="text-[10px] font-extrabold text-blue-900 uppercase block mb-1">
-                Data Escolhida
+            /* COMPARTILHADA: TURNOS PRÉ-DEFINIDOS (06h-08h, 10h-14h, 14h-18h) */
+            <div className="bg-slate-100/90 border border-slate-200/90 p-2.5 rounded-xl space-y-2 shadow-2xs">
+              <label className="text-[10px] uppercase tracking-wider text-slate-600 font-extrabold block">
+                Data e Turno da Viagem Compartilhada
               </label>
-              <input
-                type="date"
-                value={dataAgendada}
-                min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setDataAgendada(e.target.value)}
-                className="w-full bg-white border-2 border-blue-200 rounded-lg px-3 py-1.5 text-xs text-blue-900 font-bold focus:outline-none focus:border-blue-600 shadow-xs"
-              />
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  id="btn-compartilhada-hoje"
+                  onClick={() => setModoAgendamento('hoje')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                    modoAgendamento === 'hoje'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Hoje</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-compartilhada-amanha"
+                  onClick={() => setModoAgendamento('amanha')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                    modoAgendamento === 'amanha'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Amanhã</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-compartilhada-agendar"
+                  onClick={() => setModoAgendamento('agendar')}
+                  className={`py-1.5 px-2 text-xs font-extrabold rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    modoAgendamento === 'agendar'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>Outra Data</span>
+                </button>
+              </div>
+
+              {modoAgendamento === 'agendar' && (
+                <input
+                  type="date"
+                  value={dataAgendada}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDataAgendada(e.target.value)}
+                  className="w-full bg-white border border-blue-200 rounded-lg px-2.5 py-1 text-xs text-blue-900 font-bold focus:outline-none focus:border-blue-600"
+                />
+              )}
+
+              {/* Turnos: Manhã (06h - 08h), Tarde (10h - 14h), Tarde (14h - 18h) */}
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setTurnoHorario('manha')}
+                  className={`py-1.5 px-1 rounded-lg text-center border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                    turnoHorario === 'manha'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-600/30'
+                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  <span className="text-xs">🌅</span>
+                  <span className="text-[11px] font-black leading-tight">Manhã</span>
+                  <span className={`text-[8.5px] ${turnoHorario === 'manha' ? 'text-blue-100' : 'text-slate-500'}`}>
+                    06h - 08h
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTurnoHorario('tarde')}
+                  className={`py-1.5 px-1 rounded-lg text-center border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                    turnoHorario === 'tarde'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-600/30'
+                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  <span className="text-xs">☀️</span>
+                  <span className="text-[11px] font-black leading-tight">Tarde</span>
+                  <span className={`text-[8.5px] ${turnoHorario === 'tarde' ? 'text-blue-100' : 'text-slate-500'}`}>
+                    10h - 14h
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTurnoHorario('noite')}
+                  className={`py-1.5 px-1 rounded-lg text-center border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                    turnoHorario === 'noite'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-600/30'
+                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  <span className="text-xs">🌤️</span>
+                  <span className="text-[11px] font-black leading-tight">Tarde</span>
+                  <span className={`text-[8.5px] ${turnoHorario === 'noite' ? 'text-blue-100' : 'text-slate-500'}`}>
+                    14h - 18h
+                  </span>
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Seleção do Turno: Manhã ou Tarde (ou Noite) */}
-          <div>
-            <span className="text-[10px] font-extrabold text-slate-600 uppercase block mb-1.5">
-              Turno Desejado:
-            </span>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setTurnoHorario('manha')}
-                className={`py-2.5 px-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center ${
-                  turnoHorario === 'manha'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/20'
-                    : 'bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200'
-                }`}
-              >
-                <span className="text-sm">🌅</span>
-                <span className="text-xs font-black mt-0.5">Manhã</span>
-                <span className={`text-[9px] font-semibold ${turnoHorario === 'manha' ? 'text-blue-100' : 'text-slate-500'}`}>
-                  06:00 - 12:00
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTurnoHorario('tarde')}
-                className={`py-2.5 px-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center ${
-                  turnoHorario === 'tarde'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/20'
-                    : 'bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200'
-                }`}
-              >
-                <span className="text-sm">☀️</span>
-                <span className="text-xs font-black mt-0.5">Tarde</span>
-                <span className={`text-[9px] font-semibold ${turnoHorario === 'tarde' ? 'text-blue-100' : 'text-slate-500'}`}>
-                  12:00 - 16:00
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTurnoHorario('noite')}
-                className={`py-2.5 px-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center ${
-                  turnoHorario === 'noite'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/20'
-                    : 'bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200'
-                }`}
-              >
-                <span className="text-sm">🌙</span>
-                <span className="text-xs font-black mt-0.5">Noite</span>
-                <span className={`text-[9px] font-semibold ${turnoHorario === 'noite' ? 'text-blue-100' : 'text-slate-500'}`}>
-                  16:00 - 20:00
-                </span>
-              </button>
+          {/* 4. Passageiros e Malas (apenas "Malas") */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* Passageiros */}
+            <div className="bg-slate-100/90 p-2 rounded-xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center gap-1 mb-1">
+                <Users className="w-3 h-3 text-blue-600" />
+                <label className="text-[9.5px] font-extrabold text-slate-700 uppercase block">Passageiros</label>
+              </div>
+              <div className="flex items-center justify-between bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setPassageiros(Math.max(1, passageiros - 1))}
+                  className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-xs font-black text-slate-800 transition-all active:scale-95 cursor-pointer"
+                >
+                  -
+                </button>
+                <span className="text-xs font-black text-slate-900">{passageiros}</span>
+                <button
+                  type="button"
+                  onClick={() => setPassageiros(Math.min(modalidade === 'exclusiva' ? 4 : 4, passageiros + 1))}
+                  className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-xs font-black text-slate-800 transition-all active:scale-95 cursor-pointer"
+                >
+                  +
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* 4. QUANTIDADE DE PASSAGEIROS E MALAS */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* Passageiros */}
-          <div className="bg-slate-100/90 p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Users className="w-3.5 h-3.5 text-blue-600" />
-              <label className="text-[10px] font-extrabold text-slate-700 uppercase block">Passageiros</label>
-            </div>
-            <div className="flex items-center justify-between bg-white px-2 py-1 rounded-xl border-2 border-slate-200 shadow-xs">
-              <button
-                type="button"
-                onClick={() => setPassageiros(Math.max(1, passageiros - 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-black text-slate-800 transition-all active:scale-95"
-              >
-                -
-              </button>
-              <span className="text-sm font-black text-slate-900">{passageiros}</span>
-              <button
-                type="button"
-                onClick={() => setPassageiros(Math.min(4, passageiros + 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-black text-slate-800 transition-all active:scale-95"
-              >
-                +
-              </button>
+            {/* Malas (Apenas Malas conforme solicitado) */}
+            <div className="bg-slate-100/90 p-2 rounded-xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center gap-1 mb-1">
+                <Briefcase className="w-3 h-3 text-blue-600" />
+                <label className="text-[9.5px] font-extrabold text-slate-700 uppercase block">Malas</label>
+              </div>
+              <div className="flex items-center justify-between bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setMalas(Math.max(0, malas - 1))}
+                  className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-xs font-black text-slate-800 transition-all active:scale-95 cursor-pointer"
+                >
+                  -
+                </button>
+                <span className="text-xs font-black text-blue-600">{malas}</span>
+                <button
+                  type="button"
+                  onClick={() => setMalas(Math.min(8, malas + 1))}
+                  className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-xs font-black text-slate-800 transition-all active:scale-95 cursor-pointer"
+                >
+                  +
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Malas */}
-          <div className="bg-slate-100/90 p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Briefcase className="w-3.5 h-3.5 text-blue-600" />
-              <label className="text-[10px] font-extrabold text-slate-700 uppercase block">Malas / Bagagem</label>
-            </div>
-            <div className="flex items-center justify-between bg-white px-2 py-1 rounded-xl border-2 border-slate-200 shadow-xs">
-              <button
-                type="button"
-                onClick={() => setMalas(Math.max(0, malas - 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-black text-slate-800 transition-all active:scale-95"
-              >
-                -
-              </button>
-              <span className="text-sm font-black text-blue-600">{malas}</span>
-              <button
-                type="button"
-                onClick={() => setMalas(Math.min(8, malas + 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-black text-slate-800 transition-all active:scale-95"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* FOOTER COM RESUMO DO VALOR & BOTÃO CONTINUAR (PULA PARA A PRÓXIMA PÁGINA) */}
-      <div className="pt-2 border-t border-slate-200/80 space-y-3">
-        {rotaDefinida ? (
-          <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs animate-in fade-in">
+          {/* VALOR DA CORRIDA (Aparece em destaque aqui na Etapa 2) */}
+          <div className="bg-blue-50/90 border-2 border-blue-200 rounded-xl p-2.5 flex items-center justify-between shadow-2xs">
             <div>
-              <span className="text-[10px] font-extrabold text-blue-800 uppercase block">
-                Valor Total Estimado ({modalidade === 'exclusiva' ? 'Exclusivo' : 'Compartilhado'})
+              <span className="text-[9.5px] font-extrabold text-blue-800 uppercase block">
+                Valor da Corrida ({modalidade === 'exclusiva' ? 'Exclusiva' : 'Compartilhada'})
               </span>
-              <div className="text-xl font-black text-slate-900">
+              <div className="text-lg sm:text-xl font-black text-slate-900 leading-none mt-0.5">
                 R$ {valorTotal.toFixed(2).replace('.', ',')}
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-2.5 py-1 rounded-lg block">
+              <span className="text-[9.5px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-md inline-block">
                 Pago no Embarque
               </span>
-              <span className="text-[9px] text-slate-500 font-medium mt-0.5 block">
-                {distanciaKm} km rodados
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-slate-100 border border-slate-200/90 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
-            <div>
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase block">
-                Valor Total Estimado ({modalidade === 'exclusiva' ? 'Exclusivo' : 'Compartilhado'})
-              </span>
-              <div className="text-base font-black text-slate-400">
-                --
-              </div>
-              <span className="text-[10px] text-slate-500 font-medium">
-                Informe a origem e o destino para calcular o valor
-              </span>
-            </div>
-            <div className="text-right shrink-0">
-              <span className="text-[10px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded-lg block shadow-2xs">
+              <span className="text-[9px] text-slate-500 font-medium block mt-0.5">
                 Tarifa: R$ {precoPorKmAtual.toFixed(2).replace('.', ',')} / km
               </span>
-              <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">
-                {modalidade === 'compartilhada' ? `${passageiros} passageiro(s)` : 'Carro exclusivo'}
-              </span>
             </div>
           </div>
-        )}
 
-        {erroRota && (
-          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{erroRota}</span>
+          {/* Ações da Etapa 2: Voltar e Continuar */}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setEtapaAtual(1)}
+              className="py-2.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Voltar</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-confirmar-e-solicitar"
+              onClick={handleContinuar}
+              className="flex-1 font-extrabold py-2.5 rounded-xl transition-all uppercase tracking-wider text-xs flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200 active:scale-[0.99] cursor-pointer"
+            >
+              <Car className="w-4 h-4" />
+              <span>Chamar Motorista</span>
+            </button>
           </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleContinuar}
-          disabled={!rotaDefinida}
-          className={`w-full font-extrabold py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 ${
-            rotaDefinida
-              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 active:scale-[0.99] cursor-pointer'
-              : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <span>{rotaDefinida ? 'Continuar' : 'Informe Origem e Destino para Continuar'}</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Modal de Envio e Verificação de Documentos do Passageiro */}
       <PassageiroDocumentosModal
         isOpen={showDocModal}
         onClose={() => setShowDocModal(false)}
+      />
+
+      {/* Modal Intuitivo de Escolha de Horário */}
+      <TimePickerModal
+        isOpen={showTimePicker}
+        onClose={() => setShowTimePicker(false)}
+        initialValue={horarioExclusivo}
+        onSelectTime={(timeStr) => setHorarioExclusivo(timeStr)}
+        title="Escolha o Horário de Saída"
       />
     </div>
   );

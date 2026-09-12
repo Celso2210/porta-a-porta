@@ -15,6 +15,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { SolicitacaoViagem } from '../../types';
+import { formatarTurnoEVagas, getTurnoLabel } from '../../services/turnoService';
 
 interface MotoristaPassageirosListProps {
   muralView: 'disponiveis' | 'aceitos';
@@ -54,12 +55,6 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
   const viagemExclusivaAceita = passageirosAceitos.find(s => s.modalidade === 'exclusiva');
   const temViagemExclusiva = !!viagemExclusivaAceita;
   const temPassageirosCompartilhados = passageirosAceitos.some(s => s.modalidade !== 'exclusiva');
-
-  const getTurnoLabel = (turno: string) => {
-    if (turno === 'manha') return 'Manhã';
-    if (turno === 'tarde') return 'Tarde';
-    return 'Noite';
-  };
 
   return (
     <div className="space-y-4">
@@ -174,14 +169,14 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
                   <div
                     key={sol.id}
                     id={`item-passageiro-disponivel-${sol.id}`}
-                    className={`p-3 sm:py-2.5 sm:px-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                    className={`p-3 sm:py-2.5 sm:px-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 overflow-hidden w-full ${
                       isExclusiva 
                         ? 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 shadow-xs' 
                         : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700 shadow-xs'
                     }`}
                   >
                     {/* Informações em Linha Fina (Tipo E-mail) */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <div className={`w-8 h-8 rounded-lg font-bold flex items-center justify-center shrink-0 text-xs border ${
                         isExclusiva 
                           ? 'bg-amber-500 text-slate-950 border-amber-400/50 shadow-xs' 
@@ -189,29 +184,29 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
                       }`}>
                         {sol.passageiroNome.charAt(0)}
                       </div>
-                      <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 flex-wrap">
-                        <span className="font-bold text-white text-sm whitespace-nowrap">{sol.passageiroNome}</span>
+                      <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <span className="font-bold text-white text-sm">{sol.passageiroNome}</span>
                         
                         {/* Tag Exclusiva ou Compartilhada */}
                         {isExclusiva ? (
-                          <span className="text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1 whitespace-nowrap">
-                            <Crown className="w-3 h-3 text-amber-400" />
-                            Viagem Exclusiva, Carro Fechado
+                          <span className="text-[10.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <Crown className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span>Viagem Exclusiva</span>
                           </span>
                         ) : (
-                          <span className="text-[11px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1 whitespace-nowrap">
-                            <Users className="w-3 h-3 text-blue-400" />
-                            Compartilhada ({sol.qtdPassageiros} vaga{sol.qtdPassageiros > 1 ? 's' : ''})
+                          <span className="text-[10.5px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <Users className="w-3 h-3 text-blue-400 shrink-0" />
+                            <span>Compartilhada ({sol.qtdPassageiros} vaga{sol.qtdPassageiros > 1 ? 's' : ''})</span>
                           </span>
                         )}
 
-                        <span className="text-[11px] bg-slate-700 text-slate-300 border border-slate-600 font-medium px-2 py-0.5 rounded-md whitespace-nowrap">
-                          {sol.horarioDesejado || '08:00'} ({getTurnoLabel(turnoHorario)})
+                        <span className="text-[10.5px] bg-slate-700 text-slate-300 border border-slate-600 font-medium px-2 py-0.5 rounded-md inline-flex items-center">
+                          {formatarTurnoEVagas(sol.horarioDesejado, sol.qtdPassageiros, sol.modalidade === 'exclusiva')}
                         </span>
 
-                        <div className="flex items-center gap-1 text-xs text-slate-300 font-medium whitespace-nowrap">
+                        <div className="flex items-center gap-1 text-xs text-slate-300 font-medium flex-wrap">
                           <span className="text-white font-semibold">{sol.cidadeOrigem}</span>
-                          <span className="text-emerald-400 font-bold">➔</span>
+                          <span className="text-emerald-400 font-bold shrink-0">➔</span>
                           <span className="text-white font-semibold">{sol.cidadeDestino}</span>
                         </div>
 
@@ -224,12 +219,12 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
                     </div>
 
                     {/* Valor da Passagem & Botão Aceitar Passageiro */}
-                    <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-700">
-                      <div className="text-left md:text-right">
-                        <span className="text-[10px] text-slate-400 block font-medium leading-none">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700 w-full md:w-auto shrink-0">
+                      <div className="flex items-center justify-between sm:flex-col sm:items-end gap-1">
+                        <span className="text-[10px] text-slate-400 font-medium leading-none">
                           {isExclusiva ? 'Total Fechado' : 'Passagem'}
                         </span>
-                        <span className={`text-sm sm:text-base font-black ${isExclusiva ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        <span className={`text-base sm:text-lg font-black ${isExclusiva ? 'text-amber-400' : 'text-emerald-400'}`}>
                           R$ {sol.valorTotal.toFixed(2).replace('.', ',')}
                         </span>
                       </div>
@@ -240,19 +235,19 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
                           type="button"
                           id={`btn-aceitar-passageiro-${sol.id}`}
                           onClick={() => onAceitarPassageiro(sol)}
-                          className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                          className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <Crown className="w-3.5 h-3.5" />
-                          <span>Aceitar Passageiro Viagem Exclusiva</span>
+                          <Crown className="w-4 h-4 shrink-0" />
+                          <span>Aceitar Viagem Exclusiva</span>
                         </button>
                       ) : (
                         <button
                           type="button"
                           id={`btn-aceitar-passageiro-${sol.id}`}
                           onClick={() => onAceitarPassageiro(sol)}
-                          className="py-2 px-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                          className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <Check className="w-4 h-4 stroke-[3] shrink-0" />
                           <span>Aceitar Passageiro</span>
                         </button>
                       )}
@@ -331,7 +326,7 @@ export const MotoristaPassageirosList: React.FC<MotoristaPassageirosListProps> =
 
                           <span className="text-[11px] bg-slate-700 text-slate-300 font-bold px-2 py-0.5 rounded-md border border-slate-600 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-emerald-400" />
-                            Horário: {sol.horarioDesejado || '08:00'}
+                            {formatarTurnoEVagas(sol.horarioDesejado, sol.qtdPassageiros, sol.modalidade === 'exclusiva')}
                           </span>
                         </div>
 

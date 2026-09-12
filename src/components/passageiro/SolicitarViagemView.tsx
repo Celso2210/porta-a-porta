@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { buscarVagasMotoristaDisponiveis, getOfertasVagas } from '../../services/tripStore';
 import { OfertaVaga, TurnoViagem } from '../../types';
+import { detectarTurno } from '../../services/turnoService';
 
 interface SolicitarViagemViewProps {
   initialData: {
@@ -68,10 +69,7 @@ export const SolicitarViagemView: React.FC<SolicitarViagemViewProps> = ({
 
   // Detecta o turno selecionado
   const turnoDetectado: TurnoViagem = useMemo(() => {
-    const ag = (initialData.agendamento || '').toLowerCase();
-    if (ag.includes('noite') || ag.includes('16h') || ag.includes('18h')) return 'noite';
-    if (ag.includes('tarde') || ag.includes('12h')) return 'tarde';
-    return 'manha';
+    return detectarTurno(initialData.agendamento);
   }, [initialData.agendamento]);
 
   // Busca se algum motorista já publicou vagas para esta rota e turno
@@ -180,9 +178,15 @@ export const SolicitarViagemView: React.FC<SolicitarViagemViewProps> = ({
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 text-[11px]">
-            <span className="font-extrabold text-slate-700 flex items-center gap-1">
+            <span className="font-extrabold text-slate-700 flex items-center gap-1.5 flex-wrap">
               <Car className="w-3.5 h-3.5 text-blue-600" />
-              Turno: <strong className="text-slate-900 capitalize">{turnoDetectado === 'manha' ? 'Manhã' : turnoDetectado === 'tarde' ? 'Tarde' : 'Noite'}</strong>
+              {modalidade === 'exclusiva' ? (
+                <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-2 py-0.5 rounded-md text-[11px]">
+                  Horário: <strong className="text-amber-950 font-black">{initialData.agendamento || 'A definir'}</strong> • Viagem Exclusiva
+                </span>
+              ) : (
+                <>Turno: <strong className="text-slate-900">{turnoDetectado === 'manha' ? 'Manhã (06h às 08h)' : turnoDetectado === 'tarde' ? 'Tarde (10h às 14h)' : 'Tarde (14h às 18h)'}</strong></>
+              )}
             </span>
             <span className="font-black text-blue-600">
               {distanciaKm} km rodados

@@ -7,7 +7,8 @@ import {
   Compass, 
   Sparkles,
   PhoneCall,
-  Bell
+  Bell,
+  LogIn
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -77,14 +78,14 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         </div>
 
         {/* Module Switcher Buttons */}
-        <div className={`flex items-center gap-1 p-1 rounded-xl border w-full md:w-auto overflow-x-auto ${
+        <div className={`flex items-center gap-1 p-1 rounded-xl border w-full md:w-auto overflow-x-auto max-w-full ${
           isMotorista 
             ? 'bg-slate-800 border-slate-700' 
             : 'bg-slate-100 border-slate-200'
         }`}>
           <button
             onClick={() => setActiveModule('passageiro')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeModule === 'passageiro'
                 ? 'bg-blue-600 text-white shadow-sm font-bold'
                 : isMotorista
@@ -98,7 +99,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
           <button
             onClick={() => setActiveModule('motorista')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeModule === 'motorista'
                 ? 'bg-blue-600 text-white shadow-sm font-bold'
                 : isMotorista
@@ -111,22 +112,23 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           </button>
 
           <button
+            id="nav-btn-tela-login"
             onClick={() => setActiveModule('auth')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeModule === 'auth'
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
+                ? 'bg-emerald-600 text-white shadow-md font-extrabold ring-2 ring-emerald-400/50'
                 : isMotorista
-                ? 'text-slate-300 hover:text-white hover:bg-slate-700'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'text-emerald-400 hover:text-white hover:bg-slate-700 font-bold'
+                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-900 font-bold border border-emerald-200'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Autenticação Firebase</span>
+            <LogIn className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Tela de Login / Perfil</span>
           </button>
 
           <button
             onClick={() => setActiveModule('admin')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeModule === 'admin'
                 ? 'bg-blue-600 text-white shadow-sm font-bold'
                 : isMotorista
@@ -140,7 +142,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
           <button
             onClick={() => setActiveModule('docs')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeModule === 'docs'
                 ? 'bg-blue-600 text-white shadow-sm font-bold'
                 : isMotorista
